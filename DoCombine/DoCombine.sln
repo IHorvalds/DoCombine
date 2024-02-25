@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34607.119
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DoCombine", "DoCombine\DoCombine.csproj", "{2BB505A0-8BC1-45DF-A5AC-BA7680C70849}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2BB505A0-8BC1-45DF-A5AC-BA7680C70849}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2BB505A0-8BC1-45DF-A5AC-BA7680C70849}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2BB505A0-8BC1-45DF-A5AC-BA7680C70849}.Debug|x64.ActiveCfg = Debug|x64
+		{2BB505A0-8BC1-45DF-A5AC-BA7680C70849}.Debug|x64.Build.0 = Debug|x64
+		{2BB505A0-8BC1-45DF-A5AC-BA7680C70849}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2BB505A0-8BC1-45DF-A5AC-BA7680C70849}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2BB505A0-8BC1-45DF-A5AC-BA7680C70849}.Release|x64.ActiveCfg = Release|x64
+		{2BB505A0-8BC1-45DF-A5AC-BA7680C70849}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {150CB6E4-37BE-4398-9F32-BCE11A132E00}
+	EndGlobalSection
+EndGlobal
