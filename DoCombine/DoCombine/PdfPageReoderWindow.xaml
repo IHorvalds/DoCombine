@@ -5,7 +5,6 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:dd="urn:gong-wpf-dragdrop"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-        xmlns:local="clr-namespace:DoCombine"
         mc:Ignorable="d"
         Title="Reorder pages" Height="500" Width="600"
         Background="#FF252323">
@@ -13,7 +12,6 @@
         <ContextMenu x:Key="PageContextMenu">
             <ui:MenuItem Header="Remove" Click="PageDelete_Click"/>
         </ContextMenu>
-        <local:IndexToTextConverter x:Key="IndexToTextConverter" />
     </Window.Resources>
     <Grid>
         <Grid.RowDefinitions>
@@ -32,7 +30,7 @@
             <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
                 <ItemsControl x:Name="PagesListBox" VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
                           d:ItemsSource="{d:SampleData ItemCount=10}"
-                          ItemsSource="{Binding Pages}"
+                          ItemsSource="{Binding Thumbnails}"
                           dd:DragDrop.IsDragSource="True"
                           dd:DragDrop.IsDropTarget="True"
                           dd:DragDrop.DropHandler="{Binding}">
@@ -43,17 +41,11 @@
                                     <RowDefinition Height="*" />
                                     <RowDefinition Height="auto" />
                                 </Grid.RowDefinitions>
-                                <Image Grid.Row="0" d:Source="https://images.unsplash.com/photo-1708588760720-f243adaf3f90" >
-                                    <Image.Source>
-                                        <PriorityBinding>
-                                            <Binding Path="FastThumbnail"></Binding>
-                                            <Binding Path="SlowThumbnail" IsAsync="True"></Binding>
-                                        </PriorityBinding>
-                                    </Image.Source>
-                                </Image>
+                                <Image Grid.Row="0" d:Source="https://images.unsplash.com/photo-1708588760720-f243adaf3f90" Source="{Binding Thumbnail,IsAsync=True, Mode=OneWay}"/>
+                                <ui:ProgressRing Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}"
+		                                         HorizontalAlignment="Center" IsIndeterminate="True"/>
                                 <Label Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Center" FontSize="6" Foreground="White"
-                                        Content="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ContentPresenter}}, 
-                                      Converter={StaticResource IndexToTextConverter}}"/>
+                                        Content="{Binding Index}"/>
                             </Grid>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>

@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
@@ -21,10 +21,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Docnet.Core" Version="2.6.0" />
     <PackageReference Include="gong-wpf-dragdrop" Version="3.2.1" />
     <PackageReference Include="PDFsharp-WPF" Version="6.0.0" />
-    <PackageReference Include="System.Drawing.Common" Version="8.0.2" />
     <PackageReference Include="WPF-UI" Version="3.0.0" />
   </ItemGroup>
 

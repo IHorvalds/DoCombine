@@ -1,7 +1,8 @@
 {
   "profiles": {
     "DoCombine": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "commandLineArgs": "\"C:\\Users\\ihorv\\Downloads\\rocSPL.pdf\"\r\n\"C:\\Users\\ihorv\\Downloads\\US2185367.pdf\""
     }
   }
 }

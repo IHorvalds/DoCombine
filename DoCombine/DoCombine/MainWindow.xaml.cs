@@ -2,7 +2,6 @@
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
-using System.Windows.Controls;
 using GongSolutions.Wpf.DragDrop;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
@@ -131,6 +130,7 @@ namespace DoCombine
                     {
                         exported.AddPage(page);
                     }
+                    doc.Dispose();
                 }
             }
             else
@@ -160,6 +160,7 @@ namespace DoCombine
                 {
                     PdfDocument doc = PdfReader.Open(path, PdfDocumentOpenMode.Import);
                     pages.AddRange(doc.Pages);
+                    doc.Dispose();
                 }
             }
 
@@ -169,10 +170,14 @@ namespace DoCombine
                 if (reorderWindow.Modified)
                 {
                     Pages.Clear();
-                    reorderWindow.Pages.ToList().ForEach(pwt => { Pages.Add(pwt.Page); });
+                    reorderWindow.Thumbnails.ToList().ForEach(pwt => { Pages.Add(pages[pwt.Index]); });
                     PagesReordered.Object = true;
                 }
             }
+            pages.Clear();
+            ((IDisposable)reorderWindow).Dispose();
+            GC.Collect(GC.MaxGeneration);
+            GC.WaitForPendingFinalizers();
         }
 
         private void ResetPages_Click(object sender, RoutedEventArgs e)

@@ -1,144 +1,154 @@
-﻿using Docnet.Core;
-using Docnet.Core.Converters;
-using Docnet.Core.Models;
-using Docnet.Core.Readers;
-using GongSolutions.Wpf.DragDrop;
-using PdfSharp.Pdf;
+﻿using GongSolutions.Wpf.DragDrop;
 using System.Collections.ObjectModel;
-using System.Drawing;
-using System.Drawing.Imaging;
-using System.Globalization;
+using System.ComponentModel;
 using System.IO;
-using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
 using System.Windows.Media.Imaging;
+using Windows.Data.Pdf;
+using Windows.Storage.Streams;
 using Wpf.Ui.Controls;
+
+using PdfSharpDocument = PdfSharp.Pdf.PdfDocument;
+using PdfSharpPage = PdfSharp.Pdf.PdfPage;
 
 namespace DoCombine
 {
-    public class IndexToTextConverter : IValueConverter
+    public sealed class PageThumbnail : INotifyPropertyChanged
     {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        private int _index;
+        private StrongBox<List<Tuple<PdfSharpPage, WeakReference>>> _pages;
+        public int Index
         {
-            DependencyObject? depObj = value as DependencyObject;
-            if (depObj != null)
+            get
             {
-                ItemsControl itemsControl = ItemsControl.ItemsControlFromItemContainer(depObj);
-                if (itemsControl != null)
+                return _index + 1;
+            }
+            private set
+            {
+                _index = value;
+            }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        public object? Thumbnail
+        {
+            get
+            {
+                if (!_pages.Value![_index].Item2.IsAlive)
                 {
-                    int index = itemsControl.ItemContainerGenerator.IndexFromContainer(depObj);
-                    return $"{index + 1}";
+                    GetThumbnail().ContinueWith(t =>
+                    {
+                        Thumbnail = t.Result;
+                    });
+                    return null;
+                }
+                return _pages.Value![_index].Item2.Target ?? null;
+            }
+            private set
+            {
+                if (value != null && _pages.Value![_index].Item2.Target != value)
+                {
+                    _pages.Value![_index].Item2.Target = value;
+                    OnPropertyChanged();
                 }
             }
-            return string.Empty;
         }
 
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotSupportedException();
-        }
-    }
-
-    public sealed class PageWithThumbnail
-    {
-        public PdfPage Page;
-        private WeakReference _weakReference = new WeakReference(null);
-
-        public PageWithThumbnail(ref PdfPage page)
-        {
-            Page = page;
-        }
-
-        public object SlowThumbnail
+        public bool IsLoading
         {
             get
             {
-                return _weakReference.Target ?? (_weakReference.Target = GetThumbnail());
+                return !_pages.Value![_index].Item2.IsAlive;
             }
         }
 
-        public object FastThumbnail
+        public PageThumbnail(int index, StrongBox<List<Tuple<PdfSharpPage, WeakReference>>> pages)
         {
-            get
-            {
-                return _weakReference.Target ?? DependencyProperty.UnsetValue;
-            }
+            Index = index;
+            _pages = pages;
         }
 
-        private BitmapImage GetThumbnail()
+        private async Task<BitmapImage?> GetThumbnail()
         {
-            Bitmap bmp;
-            using (MemoryStream stream = new MemoryStream())
+            // Uncomment next line to see the loaders
+            // await Task.Delay(5000);
+            if (_pages.Value is null || _pages.Value.Count < _index)
             {
-                PdfDocument tmp = new PdfDocument();
-                tmp.AddPage(Page);
-                tmp.Save(stream);
-                IDocReader docReader =
-                    DocLib.Instance.GetDocReader(stream.ToArray(), new PageDimensions(PdfPageReorderWindow.ITEM_MAX_SIZE, PdfPageReorderWindow.ITEM_MAX_SIZE));
-                IPageReader pageReader = docReader.GetPageReader(0);
-
-                var width = pageReader.GetPageWidth();
-                var height = pageReader.GetPageHeight();
-                var rawBytes = pageReader.GetImage(new NaiveTransparencyRemover(0xFF, 0xFF, 0xFF));
-
-                bmp = new Bitmap(width, height, PixelFormat.Format32bppRgb);
-
-                AddBytes(bmp, rawBytes);
+                //This should never happen, but guard against it anyway
+                return null;
             }
-            using (MemoryStream imgStream = new MemoryStream())
+
+            PdfSharpDocument tmp = new PdfSharpDocument();
+            MemoryStream stream = new MemoryStream();
+            tmp.AddPage(_pages.Value[_index].Item1);
+            tmp.Save(stream);
+            tmp.Dispose();
+
+            PdfDocument pdf = await PdfDocument.LoadFromStreamAsync(stream.AsRandomAccessStream());
+            PdfPage page = pdf.GetPage(0);
+            await page.PreparePageAsync();
+
+            using (var imras = new InMemoryRandomAccessStream())
             {
-                bmp.Save(imgStream, ImageFormat.Png);
-                imgStream.Position = 0;
+                PdfPageRenderOptions renderOptions = new PdfPageRenderOptions();
+                renderOptions.DestinationHeight = (uint)(PdfPageReorderWindow.ITEM_MAX_SIZE * 0.75) * 2;
+                renderOptions.DestinationWidth = (uint)(page.Size.Width / page.Size.Height * PdfPageReorderWindow.ITEM_MAX_SIZE * 0.75) * 2;
+                renderOptions.BitmapEncoderId = Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId;
+                renderOptions.BackgroundColor = Windows.UI.Color.FromArgb(0xff, 0xff, 0xff, 0xff);
+
+                await page.RenderToStreamAsync(imras, renderOptions);
 
                 var bitmapImage = new BitmapImage();
                 bitmapImage.BeginInit();
-                bitmapImage.StreamSource = imgStream;
+                bitmapImage.StreamSource = imras.AsStream();
                 bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
                 bitmapImage.EndInit();
                 bitmapImage.Freeze();
-
+                stream.Dispose();
                 return bitmapImage;
             }
         }
 
-        private static void AddBytes(Bitmap bmp, byte[] rawBytes)
+        private void OnPropertyChanged()
         {
-            var rect = new Rectangle(0, 0, bmp.Width, bmp.Height);
-
-            var bmpData = bmp.LockBits(rect, ImageLockMode.WriteOnly, bmp.PixelFormat);
-            var pNative = bmpData.Scan0;
-
-            Marshal.Copy(rawBytes, 0, pNative, rawBytes.Length);
-            bmp.UnlockBits(bmpData);
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
         }
-
     }
 
     public partial class PdfPageReorderWindow : FluentWindow, IDropTarget, IDisposable
     {
-        public const int ITEM_MIN_SIZE = 100;
-        public const int ITEM_MAX_SIZE = 200;
-        public ObservableCollection<PageWithThumbnail> Pages { get; set; }
-        private List<PdfPage> InitialPages = [];
+        public const int ITEM_MIN_SIZE = 200;
+        public const int ITEM_MAX_SIZE = 300;
+        public ObservableCollection<PageThumbnail> Thumbnails { get; set; }
         public ObservablePrimitive<bool> Modified { get; set; }
-        private DocLib docLib { get; }
 
-        public PdfPageReorderWindow(List<PdfPage> initialPages)
+        private List<Tuple<PdfSharpPage, WeakReference>> _initialPages = [];
+
+        public PdfPageReorderWindow(List<PdfSharpPage> initialPages)
         {
             InitializeComponent();
             DataContext = this;
-            Pages = new ObservableCollection<PageWithThumbnail>();
-            InitialPages = initialPages;
-            InitialPages.ForEach(page => Pages.Add(new PageWithThumbnail(ref page)));
+            initialPages.ToList().ForEach(page => _initialPages.Add(new Tuple<PdfSharpPage, WeakReference>(page, new WeakReference(null))));
+            Thumbnails = new ObservableCollection<PageThumbnail>();
+
+            Enumerable.Range(0, _initialPages.Count).ToList()
+                .ForEach(idx => Thumbnails.Add(new PageThumbnail(idx, new StrongBox<List<Tuple<PdfSharpPage, WeakReference>>>(_initialPages))));
+
             Modified = new ObservablePrimitive<bool>(false);
-            docLib = DocLib.Instance;
         }
 
         void IDisposable.Dispose()
         {
-            docLib.Dispose();
+            for (int i = 0; i < _initialPages.Count; ++i)
+            {
+                if (_initialPages[i].Item2.IsAlive)
+                {
+                    _initialPages[i].Item2.Target = null;
+                }
+            }
+            _initialPages.Clear();
         }
 
         private void OkButton_Click(object sender, RoutedEventArgs e)
@@ -150,8 +160,9 @@ namespace DoCombine
         private void ResetButton_Click(object sender, RoutedEventArgs e)
         {
             Modified.Object = false;
-            Pages.Clear();
-            InitialPages.ForEach(page => Pages.Add(new PageWithThumbnail(ref page)));
+            Thumbnails.Clear();
+            Enumerable.Range(0, _initialPages.Count).ToList()
+                .ForEach(idx => Thumbnails.Add(new PageThumbnail(idx, new StrongBox<List<Tuple<PdfSharpPage, WeakReference>>>(_initialPages))));
         }
 
         private void PageDelete_Click(object sender, RoutedEventArgs e)
@@ -160,10 +171,10 @@ namespace DoCombine
             Wpf.Ui.Controls.MenuItem? menuItem = sender as Wpf.Ui.Controls.MenuItem;
             if (menuItem != null)
             {
-                PageWithThumbnail? page = menuItem.DataContext as PageWithThumbnail;
-                if (page != null)
+                PageThumbnail? thumbnail = menuItem.DataContext as PageThumbnail;
+                if (thumbnail != null)
                 {
-                    Pages.Remove(page);
+                    Thumbnails.Remove(thumbnail);
                 }
             }
         }
@@ -175,7 +186,7 @@ namespace DoCombine
 
         void IDropTarget.Drop(IDropInfo dropInfo)
         {
-            if (dropInfo.Data is PageWithThumbnail[] || dropInfo.InsertIndex != dropInfo.DragInfo.SourceIndex)
+            if (dropInfo.Data is PageThumbnail[] || dropInfo.InsertIndex != dropInfo.DragInfo.SourceIndex)
             {
                 Modified.Object = true;
             }
@@ -184,7 +195,7 @@ namespace DoCombine
 
         private void WrapPanel_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            int width = int.Clamp((int)(e.NewSize.Width * 0.75), ITEM_MIN_SIZE, ITEM_MAX_SIZE);
+            int width = int.Clamp((int)(e.NewSize.Width / 5), ITEM_MIN_SIZE, ITEM_MAX_SIZE);
             WrapPanel? wrapPanel = sender as WrapPanel;
             if (wrapPanel != null)
             {
