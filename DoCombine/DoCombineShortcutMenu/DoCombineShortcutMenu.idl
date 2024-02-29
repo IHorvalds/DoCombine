@@ -1,0 +1,22 @@
+// DoCombineShortcutMenu.idl : IDL source for DoCombineShortcutMenu
+//
+
+// This file will be processed by the MIDL tool to
+// produce the type library (DoCombineShortcutMenu.tlb) and marshalling code.
+// clang-format off
+import "shobjidl.idl";
+
+
+[
+	uuid(11593a86-f4cb-4383-ab89-b1fa45e50324),
+	version(3.1),
+]
+library DoCombineShortcutMenuLib
+{
+	[uuid(73b668a5-0434-4983-bb8a-8fab7c728e64)]
+	coclass DCContextMenuHandler
+	{
+		[default] interface IShellExtInit;
+	};
+};
+//clang-format on
