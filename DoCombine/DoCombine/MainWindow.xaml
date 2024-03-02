@@ -4,10 +4,9 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:dd="urn:gong-wpf-dragdrop"
-        xmlns:local="clr-namespace:DoCombine"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         mc:Ignorable="d"
-        Title="DoCombine" Height="350" Width="450" 
+        Title="DoCombine" Height="360" Width="450" 
         Background="#FF252323">
     <Window.Resources>
         <ContextMenu x:Key="ItemContextMenu">
@@ -23,13 +22,28 @@
             <RowDefinition Height="auto"/>
         </Grid.RowDefinitions>
         <ui:TitleBar Title="DoCombine"
-                     Grid.Row="0"
-                     CloseWindowByDoubleClickOnIcon="True">
+                     Grid.Row="0">
             <ui:TitleBar.Icon>
                 <ui:ImageIcon Source="/DoCombine.ico" />
             </ui:TitleBar.Icon>
         </ui:TitleBar>
-        <Label Grid.Row="1" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="15,10,15,0" Content="Files" FontSize="10" FontWeight="Bold" />
+
+        <Grid Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="15,0,10,5" Height="30">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="auto" />
+            </Grid.ColumnDefinitions>
+            <Label Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Center" Content="Files"  FontSize="10" FontWeight="Bold"/>
+            <Menu Grid.Column="1" FlowDirection="RightToLeft">
+                <ui:MenuItem Icon="{ui:SymbolIcon MoreHorizontal24}" Foreground="White">
+                    <ui:MenuItem x:Name="ShortcutHandlerMenuItem" Click="ShortcutHandlerMenuItem_Click">
+                        <ui:MenuItem.Icon>
+                            <ui:SymbolIcon />
+                        </ui:MenuItem.Icon>
+                    </ui:MenuItem>
+                </ui:MenuItem>
+            </Menu>
+        </Grid>
         <Border Grid.Row="2" BorderBrush="#FF888888" BorderThickness="1" Margin="10,0,10,10" Background="#FF212121">
             <Grid>
                 <Label x:Name="InstructionLabel"

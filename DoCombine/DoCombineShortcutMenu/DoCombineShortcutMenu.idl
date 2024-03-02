@@ -17,6 +17,7 @@ library DoCombineShortcutMenuLib
 	coclass DCContextMenuHandler
 	{
 		[default] interface IShellExtInit;
+		interface IContextMenu;
 	};
 };
 //clang-format on

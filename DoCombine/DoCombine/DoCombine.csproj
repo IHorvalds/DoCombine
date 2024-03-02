@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <Platforms>AnyCPU;x64</Platforms>
+    <Platforms>x64</Platforms>
     <ApplicationIcon>DoCombine.ico</ApplicationIcon>
   </PropertyGroup>
 
@@ -25,5 +25,9 @@
     <PackageReference Include="PDFsharp-WPF" Version="6.0.0" />
     <PackageReference Include="WPF-UI" Version="3.0.0" />
   </ItemGroup>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="xcopy /rey $(TargetDir)\*.exe $(SolutionDir)\staging\&#xD;&#xA;xcopy /rey $(TargetDir)\*.dll $(SolutionDir)\staging\&#xD;&#xA;xcopy /rey $(TargetDir)\*.json $(SolutionDir)\staging\" />
+  </Target>
 
 </Project>

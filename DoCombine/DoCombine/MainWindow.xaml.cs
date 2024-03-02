@@ -1,8 +1,10 @@
 ﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Windows;
 using GongSolutions.Wpf.DragDrop;
+using Microsoft.Win32;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
 using Wpf.Ui.Controls;
@@ -17,7 +19,11 @@ namespace DoCombine
         private List<PdfPage> Pages { get; set; }
         public ObservablePrimitive<bool> PagesReordered { get; set; }
 
-        private Microsoft.Win32.SaveFileDialog saveFile;
+        private SaveFileDialog saveFile;
+
+        static private Guid ShortcutMenuHandlerCLSID = new("73b668a5-0434-4983-bb8a-8fab7c728e64");
+        static string CLSIDKeyPath = $@"Software\Classes\CLSID\{ShortcutMenuHandlerCLSID.ToString("B")}";
+        static string FileAssocKeyPath = $@"Software\Classes\SystemFileAssociations\.pdf\ShellEx\ContextMenuHandlers\DoCombineExt";
 
         public MainWindow()
         {
@@ -29,12 +35,13 @@ namespace DoCombine
             Pages = new List<PdfPage>();
             PagesReordered = new ObservablePrimitive<bool>(false);
 
-            saveFile = new Microsoft.Win32.SaveFileDialog();
+            saveFile = new SaveFileDialog();
             saveFile.DefaultExt = ".pdf";
             saveFile.Filter = "PDF files (*.pdf)|*.pdf|All files (*.*)|*.*";
             saveFile.AddExtension = true;
             saveFile.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
+            SetShortcutMenuItemRegisteredHeader(IsShortcutMenuHandlerRegistered());
             string[] args = Environment.GetCommandLineArgs();
             if (args.Length > 1)
             {
@@ -189,7 +196,7 @@ namespace DoCombine
         // Event handler for opening a file
         private void MenuItem_Open_Click(object sender, RoutedEventArgs e)
         {
-            Wpf.Ui.Controls.MenuItem? menuItem = sender as Wpf.Ui.Controls.MenuItem;
+            MenuItem? menuItem = sender as MenuItem;
             if (menuItem != null)
             {
                 string? document = menuItem.DataContext as string;
@@ -209,7 +216,7 @@ namespace DoCombine
         // Event handler for deleting a file
         private void MenuItem_Delete_Click(object sender, RoutedEventArgs e)
         {
-            Wpf.Ui.Controls.MenuItem? menuItem = sender as Wpf.Ui.Controls.MenuItem;
+            MenuItem? menuItem = sender as MenuItem;
             if (menuItem != null)
             {
                 string? document = menuItem.DataContext as string;
@@ -222,6 +229,71 @@ namespace DoCombine
                         InstructionLabel.Visibility = Visibility.Visible;
                     }
                 }
+            }
+        }
+
+        // Shortcut Menu Handler stuff
+        private void ShortcutHandlerMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            MenuItem? menuItem = sender as MenuItem;
+            if (menuItem != null)
+            {
+                if (IsShortcutMenuHandlerRegistered())
+                {
+                    UnregisterShortcutMenuHandler();
+                    SetShortcutMenuItemRegisteredHeader(false);
+                }
+                else
+                {
+                    RegisterShortcutMenuHandler();
+                    SetShortcutMenuItemRegisteredHeader(true);
+                }
+            }
+        }
+
+        private bool IsShortcutMenuHandlerRegistered()
+        {
+            bool registered = false;
+
+            using (RegistryKey? CLSIDKey = Registry.CurrentUser.OpenSubKey(CLSIDKeyPath + "\\InprocServer32", true))
+            using (RegistryKey? FileAssocKey = Registry.CurrentUser.OpenSubKey(FileAssocKeyPath, true))
+            {
+                registered = CLSIDKey is not null && FileAssocKey is not null;
+            }
+
+            return registered;
+        }
+
+        private void RegisterShortcutMenuHandler()
+        {
+            using (var CLSIDKey = Registry.CurrentUser.CreateSubKey(CLSIDKeyPath + "\\InprocServer32", true))
+            {
+                CLSIDKey.SetValue("", $"{Path.GetDirectoryName(Assembly.GetEntryAssembly()!.Location)}\\ShellExt\\DoCombineShortcutMenu.dll");
+                CLSIDKey.SetValue("ThreadingModel", "Apartment");
+            }
+
+            using (var FileAssocKey = Registry.CurrentUser.CreateSubKey(FileAssocKeyPath, true))
+            {
+                FileAssocKey.SetValue("", ShortcutMenuHandlerCLSID.ToString("B"));
+            }
+        }
+
+        private void UnregisterShortcutMenuHandler()
+        {
+            Registry.CurrentUser.DeleteSubKeyTree(CLSIDKeyPath, false);
+            Registry.CurrentUser.DeleteSubKeyTree(FileAssocKeyPath, false);
+        }
+
+        private void SetShortcutMenuItemRegisteredHeader(bool isRegistered)
+        {
+            // Is registered, the button will be to unregister it.
+            if (isRegistered)
+            {
+                ShortcutHandlerMenuItem.Header = "Remove DoCombine from right-click menu";
+            }
+            else
+            {
+                ShortcutHandlerMenuItem.Header = "Add DoCombine to right-click menu";
             }
         }
     }

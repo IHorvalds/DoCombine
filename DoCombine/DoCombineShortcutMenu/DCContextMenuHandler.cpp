@@ -207,6 +207,7 @@ STDMETHODIMP CDCContextMenuHandler::Initialize(_In_opt_ PCIDLIST_ABSOLUTE pidlFo
     return S_OK;
 }
 
+// IContextMenu
 STDMETHODIMP CDCContextMenuHandler::QueryContextMenu(_In_ HMENU hmenu, UINT indexMenu, UINT idCmdFirst, UINT idCmdLast,
                                                      UINT uFlags)
 {
@@ -224,7 +225,7 @@ STDMETHODIMP CDCContextMenuHandler::QueryContextMenu(_In_ HMENU hmenu, UINT inde
     // If there are any PDF files, create a menu item (mii)
     if (documents.empty())
     {
-        return S_OK;
+        return E_FAIL;
     }
 
     wchar_t strModifyDocs[128];
@@ -308,6 +309,111 @@ STDMETHODIMP CDCContextMenuHandler::InvokeCommand(_In_ CMINVOKECOMMANDINFO* pici
     return hr;
 }
 
+// IExplorerCommand
+STDMETHODIMP CDCContextMenuHandler::GetTitle(IShellItemArray* /* psiItemArray */, LPWSTR* ppszName)
+{
+    return SHStrDup(context_menu_caption.c_str(), ppszName);
+}
+
+STDMETHODIMP CDCContextMenuHandler::GetIcon(IShellItemArray* psiItemArray, LPWSTR* ppszIcon)
+{
+    std::wstring iconResourcePath = get_module_filename(g_hInst_doCombineExt);
+    iconResourcePath += L",-";
+    iconResourcePath += std::to_wstring(IDI_DOCOMBINE);
+    return SHStrDup(iconResourcePath.c_str(), ppszIcon);
+}
+
+STDMETHODIMP CDCContextMenuHandler::GetToolTip(IShellItemArray* psiItemArray, LPWSTR* ppszInfotip)
+{
+    *ppszInfotip = nullptr;
+    return E_NOTIMPL;
+}
+
+STDMETHODIMP CDCContextMenuHandler::GetCanonicalName(GUID* pguidCommandName)
+{
+    *pguidCommandName = __uuidof(this);
+    return S_OK;
+}
+
+STDMETHODIMP CDCContextMenuHandler::GetState(IShellItemArray* psiItemArray, BOOL fOkToBeSlow, EXPCMDSTATE* pCmdState)
+{
+    // Hide if there is no PDF document
+    *pCmdState = ECS_HIDDEN;
+    // Suppressing C26812 warning as the issue is in the shtypes.h library
+    // #pragma warning(suppress : 26812)
+    // Check extension of first item in the list (the item which is right-clicked on)
+    DWORD itemCount = 0;
+    if (FAILED(psiItemArray->GetCount(&itemCount)))
+    {
+        return E_FAIL;
+    }
+
+    bool        foundPDF  = false;
+    IShellItem* shellItem = nullptr;
+    for (DWORD i = 0; i < itemCount; ++i)
+    {
+        if (FAILED(psiItemArray->GetItemAt(i, &shellItem)))
+        {
+            return E_FAIL;
+        }
+
+        LPTSTR pszPath;
+        // Retrieves the entire file system path of the file from its shell item
+        HRESULT getDisplayResult = shellItem->GetDisplayName(SIGDN_FILESYSPATH, &pszPath);
+        if (S_OK != getDisplayResult || nullptr == pszPath)
+        {
+            // Avoid crashes in the following code.
+            return E_FAIL;
+        }
+
+        LPTSTR pszExt = PathFindExtension(pszPath);
+        if (nullptr == pszExt)
+        {
+            CoTaskMemFree(pszPath);
+            // Avoid crashes in the following code.
+            return E_FAIL;
+        }
+
+        // If selected file is a document...
+        // TODO: If we decide to add support for adding images as PDF pages, this should
+        // accept images as well
+        if (pszExt != nullptr)
+        {
+            auto wsExt = std::wstring(pszExt);
+            std::ranges::transform(wsExt, wsExt.begin(), ::towlower);
+            if (!wsExt.empty()) // && wsExt == L"pdf")
+            {
+                foundPDF = true;
+            }
+        }
+        CoTaskMemFree(pszPath);
+    }
+
+    if (foundPDF)
+    {
+        *pCmdState = ECS_ENABLED;
+    }
+
+    return S_OK;
+}
+
+STDMETHODIMP CDCContextMenuHandler::GetFlags(EXPCMDFLAGS* pFlags)
+{
+    *pFlags = ECF_DEFAULT;
+    return S_OK;
+}
+
+STDMETHODIMP CDCContextMenuHandler::EnumSubCommands(IEnumExplorerCommand** ppEnum)
+{
+    *ppEnum = nullptr;
+    return E_NOTIMPL;
+}
+
+STDMETHODIMP CDCContextMenuHandler::Invoke(IShellItemArray* psiItemArray, IBindCtx* pbc)
+{
+    return LaunchUtility(nullptr, psiItemArray);
+}
+
 // Launching the main exe
 HRESULT CDCContextMenuHandler::LaunchUtility(CMINVOKECOMMANDINFO* pici, IShellItemArray* psiItemArray)
 {
@@ -365,7 +471,7 @@ HRESULT CDCContextMenuHandler::LaunchUtility(CMINVOKECOMMANDINFO* pici, IShellIt
         }
     }
 
-    std::wstring utilityPath = std::format(L"{}\\DoCombine.exe", get_module_folderpath(g_hInst_doCombineExt));
+    std::wstring utilityPath = std::format(L"{}\\..\\DoCombine.exe", get_module_folderpath(g_hInst_doCombineExt));
 
     for (const auto& doc : documents)
     {

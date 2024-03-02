@@ -22,15 +22,18 @@ using namespace ATL;
 class ATL_NO_VTABLE DECLSPEC_UUID("73b668a5-0434-4983-bb8a-8fab7c728e64") CDCContextMenuHandler
     : public CComObjectRootEx<CComSingleThreadModel>,
       public CComCoClass<CDCContextMenuHandler, &CLSID_DCContextMenuHandler>,
-      public IShellExtInit
+      public IShellExtInit,
+      public IContextMenu,
+      public IExplorerCommand
 {
 public:
     DECLARE_REGISTRY_RESOURCEID(106)
-
     DECLARE_NOT_AGGREGATABLE(CDCContextMenuHandler)
 
     BEGIN_COM_MAP(CDCContextMenuHandler)
     COM_INTERFACE_ENTRY(IShellExtInit)
+    COM_INTERFACE_ENTRY(IContextMenu)
+    COM_INTERFACE_ENTRY(IExplorerCommand)
     END_COM_MAP()
 
     DECLARE_PROTECT_FINAL_CONSTRUCT()
@@ -42,13 +45,26 @@ public:
     CDCContextMenuHandler();
     ~CDCContextMenuHandler();
 
+    // IShellExtInit
     HRESULT STDMETHODCALLTYPE Initialize(_In_opt_ PCIDLIST_ABSOLUTE pidlFolder, _In_opt_ IDataObject* pdtobj,
                                          _In_opt_ HKEY hkeyProgID);
+
+    // IContextMenu
     HRESULT STDMETHODCALLTYPE QueryContextMenu(_In_ HMENU hmenu, UINT indexMenu, UINT idCmdFirst, UINT idCmdLast,
                                                UINT uFlags);
     HRESULT STDMETHODCALLTYPE GetCommandString(UINT_PTR idCmd, UINT uType, _In_ UINT* pReserved, LPSTR pszName,
                                                UINT cchMax);
     HRESULT STDMETHODCALLTYPE InvokeCommand(_In_ CMINVOKECOMMANDINFO* pici);
+
+    // IExplorerCommand
+    virtual STDMETHODIMP GetTitle(IShellItemArray* psiItemArray, LPWSTR* ppszName) override;
+    virtual STDMETHODIMP GetIcon(IShellItemArray* psiItemArray, LPWSTR* ppszIcon) override;
+    virtual STDMETHODIMP GetToolTip(IShellItemArray* psiItemArray, LPWSTR* ppszInfotip) override;
+    virtual STDMETHODIMP GetCanonicalName(GUID* pguidCommandName) override;
+    virtual STDMETHODIMP GetState(IShellItemArray* psiItemArray, BOOL fOkToBeSlow, EXPCMDSTATE* pCmdState) override;
+    virtual STDMETHODIMP Invoke(IShellItemArray* psiItemArray, IBindCtx* pbc) override;
+    virtual STDMETHODIMP GetFlags(EXPCMDFLAGS* pFlags) override;
+    virtual STDMETHODIMP EnumSubCommands(IEnumExplorerCommand** ppEnum) override;
 
 private:
     void    Uninitialize();
