@@ -2,6 +2,8 @@
 
 #include "pch.h"
 #include "resource.h"
+#include "paths.h"
+#include "logging.h"
 #include <ShlObj_core.h>
 #include <shellapi.h>
 #include <wincodec.h>
@@ -14,45 +16,8 @@
 
 namespace
 {
-// Lifted from powertoys/src/common/utils/process_path.h
-inline std::wstring get_module_filename(HMODULE mod = nullptr)
-{
-    wchar_t buffer[MAX_PATH + 1];
-    DWORD   actual_length = GetModuleFileNameW(mod, buffer, MAX_PATH);
-    if (GetLastError() == ERROR_INSUFFICIENT_BUFFER)
-    {
-        const DWORD  long_path_length = 0xFFFF; // should be always enough
-        std::wstring long_filename(long_path_length, L'\0');
-        actual_length = GetModuleFileNameW(mod, (LPWSTR) long_filename.c_str(), long_path_length);
-        return long_filename.substr(0, actual_length);
-    }
-    return {buffer, actual_length};
-}
-
-inline std::wstring get_module_folderpath(HMODULE mod = nullptr, const bool removeFilename = true)
-{
-    wchar_t buffer[MAX_PATH + 1];
-    DWORD   actual_length = GetModuleFileNameW(mod, buffer, MAX_PATH);
-    if (GetLastError() == ERROR_INSUFFICIENT_BUFFER)
-    {
-        const DWORD  long_path_length = 0xFFFF; // should be always enough
-        std::wstring long_filename(long_path_length, L'\0');
-        actual_length = GetModuleFileNameW(mod, long_filename.data(), long_path_length);
-        PathRemoveFileSpecW(long_filename.data());
-        long_filename.resize(std::wcslen(long_filename.data()));
-        long_filename.shrink_to_fit();
-        return long_filename;
-    }
-
-    if (removeFilename)
-    {
-        PathRemoveFileSpecW(buffer);
-    }
-    return {buffer, static_cast<uint64_t>(lstrlenW(buffer))};
-}
-
 // Lifted from powertoys/src/common/Themes/icon_helpers.cpp
-HBITMAP CreateBitmapFromIcon(_In_ HICON hIcon, _In_opt_ UINT width = 0, _In_opt_ UINT height = 0)
+HBITMAP create_bitmap_from_icon(_In_ HICON hIcon, _In_opt_ UINT width = 0, _In_opt_ UINT height = 0)
 {
     HBITMAP hBitmapResult = NULL;
 
@@ -150,7 +115,7 @@ HRESULT get_files_from_pdtobj(IDataObject* pdtobj, std::vector<std::wstring>& rd
             auto wsExt = std::wstring(pszExt);
             std::ranges::transform(wsExt, wsExt.begin(), ::towlower);
 
-            if (!wsExt.empty()) // && wsExt == L"pdf")
+            if (!wsExt.empty())
             {
                 rdocs.push_back(std::format(L"\"{}\"", pszPath));
             }
@@ -179,6 +144,7 @@ CDCContextMenuHandler::~CDCContextMenuHandler()
 
 void CDCContextMenuHandler::Uninitialize()
 {
+    ENTERED();
     CoTaskMemFree((LPVOID) m_pidlFolder);
     m_pidlFolder = NULL;
 
@@ -187,12 +153,15 @@ void CDCContextMenuHandler::Uninitialize()
         m_pdtobj->Release();
         m_pdtobj = NULL;
     }
+    FINISHED();
 }
 
 // IShellExtInit
 STDMETHODIMP CDCContextMenuHandler::Initialize(_In_opt_ PCIDLIST_ABSOLUTE pidlFolder, _In_opt_ IDataObject* pdtobj,
                                                _In_opt_ HKEY hkeyProgID)
 {
+    ENTERED();
+
     Uninitialize();
     if (pidlFolder)
     {
@@ -204,6 +173,8 @@ STDMETHODIMP CDCContextMenuHandler::Initialize(_In_opt_ PCIDLIST_ABSOLUTE pidlFo
         m_pdtobj = pdtobj;
         m_pdtobj->AddRef();
     }
+
+    FINISHED(std::format("Returning {}", S_OK));
     return S_OK;
 }
 
@@ -211,8 +182,10 @@ STDMETHODIMP CDCContextMenuHandler::Initialize(_In_opt_ PCIDLIST_ABSOLUTE pidlFo
 STDMETHODIMP CDCContextMenuHandler::QueryContextMenu(_In_ HMENU hmenu, UINT indexMenu, UINT idCmdFirst, UINT idCmdLast,
                                                      UINT uFlags)
 {
+    ENTERED();
     if (uFlags & CMF_DEFAULTONLY)
     {
+        FINISHED("Default only flag set");
         return S_OK;
     }
 
@@ -220,31 +193,33 @@ STDMETHODIMP CDCContextMenuHandler::QueryContextMenu(_In_ HMENU hmenu, UINT inde
     std::vector<std::wstring> documents;
     if (FAILED(get_files_from_pdtobj(m_pdtobj, documents)))
     {
+        FINISHED("Failed to get files from pdtobj");
         return E_FAIL;
     }
     // If there are any PDF files, create a menu item (mii)
     if (documents.empty())
     {
+        FINISHED("No PDF documents found");
         return E_FAIL;
     }
 
     wchar_t strModifyDocs[128];
     wcscpy_s(strModifyDocs, ARRAYSIZE(strModifyDocs), context_menu_caption.c_str());
 
-    MENUITEMINFO mii;
-    mii.cbSize     = sizeof(MENUITEMINFO);
-    mii.fMask      = MIIM_STRING | MIIM_FTYPE | MIIM_ID | MIIM_STATE;
-    mii.wID        = idCmdFirst;
-    mii.fType      = MFT_STRING;
-    mii.dwTypeData = (LPWSTR) strModifyDocs;
-    mii.fState     = MFS_ENABLED;
-    HICON hIcon    = (HICON) LoadImage(g_hInst_doCombineExt, MAKEINTRESOURCE(IDI_DOCOMBINE), IMAGE_ICON, 16, 16, 0);
+    MENUITEMINFO mii = {0};
+    mii.cbSize       = sizeof(MENUITEMINFO);
+    mii.fMask        = MIIM_STRING | MIIM_FTYPE | MIIM_ID | MIIM_STATE;
+    mii.wID          = idCmdFirst;
+    mii.fType        = MFT_STRING;
+    mii.dwTypeData   = (LPWSTR) strModifyDocs;
+    mii.fState       = MFS_ENABLED;
+    HICON hIcon      = (HICON) LoadImage(g_hInst_doCombineExt, MAKEINTRESOURCE(IDI_DOCOMBINE), IMAGE_ICON, 16, 16, 0);
     if (hIcon)
     {
         mii.fMask |= MIIM_BITMAP;
         if (m_hbmpIcon == NULL)
         {
-            m_hbmpIcon = CreateBitmapFromIcon(hIcon);
+            m_hbmpIcon = create_bitmap_from_icon(hIcon);
         }
         mii.hbmpItem = m_hbmpIcon;
         DestroyIcon(hIcon);
@@ -260,6 +235,8 @@ STDMETHODIMP CDCContextMenuHandler::QueryContextMenu(_In_ HMENU hmenu, UINT inde
     {
         hr = MAKE_HRESULT(SEVERITY_SUCCESS, FACILITY_NULL, 1);
     }
+
+    FINISHED(std::format("Returning: {}", hr));
     return hr;
 }
 
@@ -283,6 +260,7 @@ STDMETHODIMP CDCContextMenuHandler::GetCommandString(UINT_PTR idCmd, UINT uType,
 
 STDMETHODIMP CDCContextMenuHandler::InvokeCommand(_In_ CMINVOKECOMMANDINFO* pici)
 {
+    ENTERED();
     BOOL    fUnicode = FALSE;
     HRESULT hr       = E_FAIL;
 
@@ -291,6 +269,7 @@ STDMETHODIMP CDCContextMenuHandler::InvokeCommand(_In_ CMINVOKECOMMANDINFO* pici
         fUnicode = TRUE;
     }
 
+    LOGGER.debug("fUnicode: {}, pici->lpVerb: {}", fUnicode, pici->lpVerb);
     if (!fUnicode && HIWORD(pici->lpVerb))
     {
     }
@@ -306,6 +285,7 @@ STDMETHODIMP CDCContextMenuHandler::InvokeCommand(_In_ CMINVOKECOMMANDINFO* pici
         hr = LaunchUtility(pici, nullptr);
     }
 
+    FINISHED(std::format("Returning: {}", hr));
     return hr;
 }
 
@@ -317,7 +297,7 @@ STDMETHODIMP CDCContextMenuHandler::GetTitle(IShellItemArray* /* psiItemArray */
 
 STDMETHODIMP CDCContextMenuHandler::GetIcon(IShellItemArray* psiItemArray, LPWSTR* ppszIcon)
 {
-    std::wstring iconResourcePath = get_module_filename(g_hInst_doCombineExt);
+    std::wstring iconResourcePath = Paths::get_module_filenamew(g_hInst_doCombineExt);
     iconResourcePath += L",-";
     iconResourcePath += std::to_wstring(IDI_DOCOMBINE);
     return SHStrDup(iconResourcePath.c_str(), ppszIcon);
@@ -337,6 +317,8 @@ STDMETHODIMP CDCContextMenuHandler::GetCanonicalName(GUID* pguidCommandName)
 
 STDMETHODIMP CDCContextMenuHandler::GetState(IShellItemArray* psiItemArray, BOOL fOkToBeSlow, EXPCMDSTATE* pCmdState)
 {
+    ENTERED();
+
     // Hide if there is no PDF document
     *pCmdState = ECS_HIDDEN;
     // Suppressing C26812 warning as the issue is in the shtypes.h library
@@ -345,6 +327,7 @@ STDMETHODIMP CDCContextMenuHandler::GetState(IShellItemArray* psiItemArray, BOOL
     DWORD itemCount = 0;
     if (FAILED(psiItemArray->GetCount(&itemCount)))
     {
+        FINISHED("Failed to get count of items in psiItemArray");
         return E_FAIL;
     }
 
@@ -354,6 +337,7 @@ STDMETHODIMP CDCContextMenuHandler::GetState(IShellItemArray* psiItemArray, BOOL
     {
         if (FAILED(psiItemArray->GetItemAt(i, &shellItem)))
         {
+            FINISHED("Failed to item in psiItemArray at position", i);
             return E_FAIL;
         }
 
@@ -363,14 +347,16 @@ STDMETHODIMP CDCContextMenuHandler::GetState(IShellItemArray* psiItemArray, BOOL
         if (S_OK != getDisplayResult || nullptr == pszPath)
         {
             // Avoid crashes in the following code.
+            FINISHED("Failed to get file path of item at position", i);
             return E_FAIL;
         }
 
         LPTSTR pszExt = PathFindExtension(pszPath);
         if (nullptr == pszExt)
         {
-            CoTaskMemFree(pszPath);
             // Avoid crashes in the following code.
+            FINISHED("Failed to get extension of item");
+            CoTaskMemFree(pszPath);
             return E_FAIL;
         }
 
@@ -381,7 +367,7 @@ STDMETHODIMP CDCContextMenuHandler::GetState(IShellItemArray* psiItemArray, BOOL
         {
             auto wsExt = std::wstring(pszExt);
             std::ranges::transform(wsExt, wsExt.begin(), ::towlower);
-            if (!wsExt.empty()) // && wsExt == L"pdf")
+            if (!wsExt.empty() && wsExt == L"pdf")
             {
                 foundPDF = true;
             }
@@ -411,12 +397,16 @@ STDMETHODIMP CDCContextMenuHandler::EnumSubCommands(IEnumExplorerCommand** ppEnu
 
 STDMETHODIMP CDCContextMenuHandler::Invoke(IShellItemArray* psiItemArray, IBindCtx* pbc)
 {
+    ENTERED("Launching utility");
+    FINISHED();
     return LaunchUtility(nullptr, psiItemArray);
 }
 
 // Launching the main exe
 HRESULT CDCContextMenuHandler::LaunchUtility(CMINVOKECOMMANDINFO* pici, IShellItemArray* psiItemArray)
 {
+    ENTERED();
+
     std::vector<std::wstring> documents;
 
     if (psiItemArray)
@@ -424,6 +414,7 @@ HRESULT CDCContextMenuHandler::LaunchUtility(CMINVOKECOMMANDINFO* pici, IShellIt
         DWORD itemCount = 0;
         if (FAILED(psiItemArray->GetCount(&itemCount)))
         {
+            LOGGER.error("Failed to get count of items in psiItemArray");
             return E_FAIL;
         }
 
@@ -432,6 +423,7 @@ HRESULT CDCContextMenuHandler::LaunchUtility(CMINVOKECOMMANDINFO* pici, IShellIt
             IShellItem* shellItem = nullptr;
             if (FAILED(psiItemArray->GetItemAt(i, &shellItem)))
             {
+                LOGGER.error("Failed to item in psiItemArray at position {}", i);
                 return E_FAIL;
             }
 
@@ -441,6 +433,7 @@ HRESULT CDCContextMenuHandler::LaunchUtility(CMINVOKECOMMANDINFO* pici, IShellIt
             if (S_OK != getDisplayResult || nullptr == pszPath)
             {
                 // Avoid crashes in the following code.
+                LOGGER.error("Failed to get file path of item at position {}", i);
                 return E_FAIL;
             }
 
@@ -450,13 +443,14 @@ HRESULT CDCContextMenuHandler::LaunchUtility(CMINVOKECOMMANDINFO* pici, IShellIt
                 auto wsExt = std::wstring(pszExt);
                 std::ranges::transform(wsExt, wsExt.begin(), ::towlower);
 
-                if (!wsExt.empty()) // && wsExt == L"pdf")
+                if (!wsExt.empty() && wsExt == L"pdf")
                 {
                     documents.push_back(std::format(L"\"{}\"", pszPath));
                 }
             }
             else
             {
+                LOGGER.error("Failed to get extension for file");
                 CoTaskMemFree(pszPath);
                 return E_FAIL;
             }
@@ -471,7 +465,11 @@ HRESULT CDCContextMenuHandler::LaunchUtility(CMINVOKECOMMANDINFO* pici, IShellIt
         }
     }
 
-    std::wstring utilityPath = std::format(L"{}\\..\\DoCombine.exe", get_module_folderpath(g_hInst_doCombineExt));
+    std::wstring utilityPath =
+        std::format(L"{}\\..\\DoCombine.exe", Paths::get_module_folderpathw(g_hInst_doCombineExt));
+
+    LOGGER.debug("Path to executable is: {}",
+                 std::format("{}\\..\\DoCombine.exe", Paths::get_module_folderpatha(g_hInst_doCombineExt)));
 
     for (const auto& doc : documents)
     {
@@ -487,17 +485,20 @@ HRESULT CDCContextMenuHandler::LaunchUtility(CMINVOKECOMMANDINFO* pici, IShellIt
     PROCESS_INFORMATION procInfo;
     if (!CreateProcess(NULL, utilityPath.data(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &procInfo))
     {
+        LOGGER.error("Failed to launch utility. Last error: {}", GetLastError());
         return E_FAIL;
     }
 
     if (!CloseHandle(procInfo.hProcess))
     {
         auto hr = HRESULT_FROM_WIN32(GetLastError());
+        LOGGER.error("Failed to launch utility. Last error: {}", hr);
         return hr;
     }
     if (!CloseHandle(procInfo.hThread))
     {
         auto hr = HRESULT_FROM_WIN32(GetLastError());
+        LOGGER.error("Failed to launch utility. Last error: {}", hr);
         return hr;
     }
 

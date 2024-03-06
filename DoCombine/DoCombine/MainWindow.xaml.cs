@@ -19,27 +19,29 @@ namespace DoCombine
         private List<PdfPage> Pages { get; set; }
         public ObservablePrimitive<bool> PagesReordered { get; set; }
 
-        private SaveFileDialog saveFile;
+        readonly private SaveFileDialog saveFile;
 
-        static private Guid ShortcutMenuHandlerCLSID = new("73b668a5-0434-4983-bb8a-8fab7c728e64");
-        static string CLSIDKeyPath = $@"Software\Classes\CLSID\{ShortcutMenuHandlerCLSID.ToString("B")}";
-        static string FileAssocKeyPath = $@"Software\Classes\SystemFileAssociations\.pdf\ShellEx\ContextMenuHandlers\DoCombineExt";
+        readonly static private Guid ShortcutMenuHandlerCLSID = new("73b668a5-0434-4983-bb8a-8fab7c728e64");
+        readonly static string CLSIDKeyPath = $@"Software\Classes\CLSID\{ShortcutMenuHandlerCLSID.ToString("B")}";
+        readonly static string FileAssocKeyPath = $@"Software\Classes\SystemFileAssociations\.pdf\ShellEx\ContextMenuHandlers\DoCombineExt";
 
         public MainWindow()
         {
             InitializeComponent();
             DataContext = this;
-            Documents = new ObservableCollection<string>();
+            Documents = [];
             HasDocuments = new ObservablePrimitive<bool>(false);
 
-            Pages = new List<PdfPage>();
+            Pages = [];
             PagesReordered = new ObservablePrimitive<bool>(false);
 
-            saveFile = new SaveFileDialog();
-            saveFile.DefaultExt = ".pdf";
-            saveFile.Filter = "PDF files (*.pdf)|*.pdf|All files (*.*)|*.*";
-            saveFile.AddExtension = true;
-            saveFile.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            saveFile = new SaveFileDialog
+            {
+                DefaultExt = ".pdf",
+                Filter = "PDF files (*.pdf)|*.pdf|All files (*.*)|*.*",
+                AddExtension = true,
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+            };
 
             SetShortcutMenuItemRegisteredHeader(IsShortcutMenuHandlerRegistered());
             string[] args = Environment.GetCommandLineArgs();
@@ -68,8 +70,7 @@ namespace DoCombine
             // New thing(s) dragged
             if (dropInfo.Data is IDataObject)
             {
-                var dataObject = dropInfo.Data as IDataObject;
-                if (dataObject != null && dataObject.GetDataPresent(DataFormats.FileDrop))
+                if (dropInfo.Data is IDataObject dataObject && dataObject.GetDataPresent(DataFormats.FileDrop))
                 {
                     string[] files = dataObject.GetData(DataFormats.FileDrop) as string[] ?? [];
                     foreach (var file in files)
@@ -94,8 +95,7 @@ namespace DoCombine
             // New thing(s) dropped
             if (dropInfo.Data is IDataObject)
             {
-                var dataObject = dropInfo.Data as IDataObject;
-                if (dataObject != null && dataObject.GetDataPresent(DataFormats.FileDrop))
+                if (dropInfo.Data is IDataObject dataObject && dataObject.GetDataPresent(DataFormats.FileDrop))
                 {
                     string[] files = dataObject.GetData(DataFormats.FileDrop) as string[] ?? [];
                     foreach (var file in files)
@@ -126,7 +126,7 @@ namespace DoCombine
 
         private void Export_Click(object sender, RoutedEventArgs e)
         {
-            PdfDocument exported = new PdfDocument();
+            PdfDocument exported = new();
 
             if (Pages.Count == 0)
             {
@@ -162,7 +162,7 @@ namespace DoCombine
             }
             else
             {
-                pages = new List<PdfPage>();
+                pages = [];
                 foreach (var path in Documents)
                 {
                     PdfDocument doc = PdfReader.Open(path, PdfDocumentOpenMode.Import);
@@ -171,13 +171,13 @@ namespace DoCombine
                 }
             }
 
-            PdfPageReorderWindow reorderWindow = new PdfPageReorderWindow(pages);
+            PdfPageReorderWindow reorderWindow = new(pages);
             if (reorderWindow.ShowDialog().GetValueOrDefault(false))
             {
                 if (reorderWindow.Modified)
                 {
                     Pages.Clear();
-                    reorderWindow.Thumbnails.ToList().ForEach(pwt => { Pages.Add(pages[pwt.Index]); });
+                    reorderWindow.Thumbnails.ToList().ForEach(pwt => { Pages.Add(pages[pwt.Index - 1]); });
                     PagesReordered.Object = true;
                 }
             }
@@ -196,13 +196,11 @@ namespace DoCombine
         // Event handler for opening a file
         private void MenuItem_Open_Click(object sender, RoutedEventArgs e)
         {
-            MenuItem? menuItem = sender as MenuItem;
-            if (menuItem != null)
+            if (sender is MenuItem menuItem)
             {
-                string? document = menuItem.DataContext as string;
-                if (document != null)
+                if (menuItem.DataContext is string document)
                 {
-                    ProcessStartInfo startInfo = new ProcessStartInfo
+                    ProcessStartInfo startInfo = new()
                     {
                         FileName = document,
                         UseShellExecute = true
@@ -216,11 +214,9 @@ namespace DoCombine
         // Event handler for deleting a file
         private void MenuItem_Delete_Click(object sender, RoutedEventArgs e)
         {
-            MenuItem? menuItem = sender as MenuItem;
-            if (menuItem != null)
+            if (sender is MenuItem menuItem)
             {
-                string? document = menuItem.DataContext as string;
-                if (document != null)
+                if (menuItem.DataContext is string document)
                 {
                     Documents.Remove(document);
                     if (Documents.Count == 0)
@@ -235,8 +231,7 @@ namespace DoCombine
         // Shortcut Menu Handler stuff
         private void ShortcutHandlerMenuItem_Click(object sender, RoutedEventArgs e)
         {
-            MenuItem? menuItem = sender as MenuItem;
-            if (menuItem != null)
+            if (sender is MenuItem)
             {
                 if (IsShortcutMenuHandlerRegistered())
                 {
@@ -251,7 +246,7 @@ namespace DoCombine
             }
         }
 
-        private bool IsShortcutMenuHandlerRegistered()
+        private static bool IsShortcutMenuHandlerRegistered()
         {
             bool registered = false;
 
@@ -264,7 +259,7 @@ namespace DoCombine
             return registered;
         }
 
-        private void RegisterShortcutMenuHandler()
+        private static void RegisterShortcutMenuHandler()
         {
             using (var CLSIDKey = Registry.CurrentUser.CreateSubKey(CLSIDKeyPath + "\\InprocServer32", true))
             {
@@ -272,13 +267,11 @@ namespace DoCombine
                 CLSIDKey.SetValue("ThreadingModel", "Apartment");
             }
 
-            using (var FileAssocKey = Registry.CurrentUser.CreateSubKey(FileAssocKeyPath, true))
-            {
-                FileAssocKey.SetValue("", ShortcutMenuHandlerCLSID.ToString("B"));
-            }
+            using var FileAssocKey = Registry.CurrentUser.CreateSubKey(FileAssocKeyPath, true);
+            FileAssocKey.SetValue("", ShortcutMenuHandlerCLSID.ToString("B"));
         }
 
-        private void UnregisterShortcutMenuHandler()
+        private static void UnregisterShortcutMenuHandler()
         {
             Registry.CurrentUser.DeleteSubKeyTree(CLSIDKeyPath, false);
             Registry.CurrentUser.DeleteSubKeyTree(FileAssocKeyPath, false);

@@ -4,6 +4,7 @@
 AppName=DoCombine
 AppVersion=1.0.0
 WizardStyle=modern
+OutputBaseFilename=InstallDoCombine
 PrivilegesRequiredOverridesAllowed=dialog
 DefaultDirName={autopf64}\TaylorLab
 Compression=lzma2
