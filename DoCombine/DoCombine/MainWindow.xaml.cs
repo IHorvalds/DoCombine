@@ -223,6 +223,7 @@ namespace DoCombine
                     {
                         HasDocuments.Object = false;
                         InstructionLabel.Visibility = Visibility.Visible;
+                        PagesReordered.Object = false;
                     }
                 }
             }
