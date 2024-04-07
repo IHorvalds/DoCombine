@@ -2,7 +2,7 @@
 
 [Setup]
 AppName=DoCombine
-AppVersion=1.0.0
+AppVersion=1.0.2
 WizardStyle=modern
 OutputBaseFilename=InstallDoCombine
 PrivilegesRequiredOverridesAllowed=dialog
@@ -16,6 +16,10 @@ ArchitecturesInstallIn64BitMode=x64
 [Files]
 Source: "*"; DestDir: "{app}\bin\"; Permissions: users-modify
 Source: "ShellExt\*"; DestDir: "{app}\bin\ShellExt\"; Permissions: users-modify
+Source: "de\*"; DestDir: "{app}\bin\de\"; Permissions: users-modify
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{localappdata}\TaylorLabs\DoCombine"
 
 [Icons]
 Name: "{group}\DoCombine"; Filename: "{app}\bin\DoCombine.exe"; WorkingDir: "{app}"

@@ -154,9 +154,9 @@ namespace DoCombine
                         var page = exported.AddPage();
                         XImage image = XImage.FromFile(path);
                         page.Width = image.PointWidth;
-                        page.Height = image.PointWidth;
+                        page.Height = image.PointHeight;
                         XGraphics gfx = XGraphics.FromPdfPage(page);
-                        gfx.DrawImage(image, 0, 0, image.PointWidth, image.PointWidth);
+                        gfx.DrawImage(image, 0, 0, image.PointWidth, image.PointHeight);
                     }
                 }
             }
