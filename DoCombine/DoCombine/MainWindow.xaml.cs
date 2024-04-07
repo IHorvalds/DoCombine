@@ -3,8 +3,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Media.Media3D;
 using GongSolutions.Wpf.DragDrop;
 using Microsoft.Win32;
+using PdfSharp.Drawing;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
 using Wpf.Ui.Controls;
@@ -15,6 +17,8 @@ namespace DoCombine
     {
         public ObservableCollection<string> Documents { get; set; }
         public ObservablePrimitive<bool> HasDocuments { get; set; }
+
+        private static readonly List<string> ImageExtensions = new List<string> { ".JPG", ".JPEG", ".JPE", ".BMP", ".GIF", ".PNG" };
 
         private List<PdfPage> Pages { get; set; }
         public ObservablePrimitive<bool> PagesReordered { get; set; }
@@ -50,7 +54,8 @@ namespace DoCombine
                 bool gotPdfDoc = false;
                 for (int i = 1; i < args.Length; i++)
                 {
-                    if (File.Exists(args[i]) && PdfReader.TestPdfFile(args[i]) != 0)
+                    var fi = new FileInfo(args[i]);
+                    if (File.Exists(args[i]) && (PdfReader.TestPdfFile(args[i]) != 0 || ImageExtensions.Contains(fi.Extension.ToUpper())))
                     {
                         Documents.Add(args[i]);
                         gotPdfDoc = true;
@@ -75,7 +80,8 @@ namespace DoCombine
                     string[] files = dataObject.GetData(DataFormats.FileDrop) as string[] ?? [];
                     foreach (var file in files)
                     {
-                        if (PdfReader.TestPdfFile(file) != 0)
+                        var fi = new FileInfo(file);
+                        if (PdfReader.TestPdfFile(file) != 0 || ImageExtensions.Contains(fi.Extension.ToUpper()))
                         {
                             dropInfo.DropTargetAdorner = DropTargetAdorners.Highlight;
                             dropInfo.Effects = DragDropEffects.Copy;
@@ -100,7 +106,8 @@ namespace DoCombine
                     string[] files = dataObject.GetData(DataFormats.FileDrop) as string[] ?? [];
                     foreach (var file in files)
                     {
-                        if (PdfReader.TestPdfFile(file) != 0)
+                        var fi = new FileInfo(file);
+                        if (PdfReader.TestPdfFile(file) != 0 || ImageExtensions.Contains(fi.Extension.ToUpper()))
                         {
                             Documents.Add(file);
                             modified = true;
@@ -132,12 +139,25 @@ namespace DoCombine
             {
                 foreach (var path in Documents)
                 {
-                    PdfDocument doc = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                    foreach (var page in doc.Pages)
+                    if (PdfReader.TestPdfFile(path) != 0)
                     {
-                        exported.AddPage(page);
+                        PdfDocument doc = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                        foreach (var page in doc.Pages)
+                        {
+                            exported.AddPage(page);
+                        }
+                        doc.Dispose();
                     }
-                    doc.Dispose();
+                    else
+                    {
+                        // Image
+                        var page = exported.AddPage();
+                        XImage image = XImage.FromFile(path);
+                        page.Width = image.PointWidth;
+                        page.Height = image.PointWidth;
+                        XGraphics gfx = XGraphics.FromPdfPage(page);
+                        gfx.DrawImage(image, 0, 0, image.PointWidth, image.PointWidth);
+                    }
                 }
             }
             else
@@ -165,9 +185,32 @@ namespace DoCombine
                 pages = [];
                 foreach (var path in Documents)
                 {
-                    PdfDocument doc = PdfReader.Open(path, PdfDocumentOpenMode.Import);
-                    pages.AddRange(doc.Pages);
-                    doc.Dispose();
+                    if (PdfReader.TestPdfFile(path) != 0)
+                    {
+                        PdfDocument doc = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                        pages.AddRange(doc.Pages);
+                        doc.Dispose();
+                    }
+                    else
+                    {
+                        // Image
+                        using (var stream = new MemoryStream())
+                        {
+                            using (PdfDocument doc = new())
+                            {
+                                var page = doc.AddPage();
+                                XImage image = XImage.FromFile(path);
+                                page.Width = image.PointWidth;
+                                page.Height = image.PointHeight;
+                                XGraphics gfx = XGraphics.FromPdfPage(page);
+                                gfx.DrawImage(image, 0, 0, image.PointWidth, image.PointHeight);
+                                doc.Save(stream);
+                            }
+
+                            var doc2 = PdfReader.Open(stream, PdfDocumentOpenMode.Import);
+                            pages.Add(doc2.Pages[0]);
+                        }
+                    }
                 }
             }
 
